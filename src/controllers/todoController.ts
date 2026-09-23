@@ -1,73 +1,50 @@
 import { Request, Response } from 'express';
-import { TodoModel } from '../models/todoModel';
+import todoModel from '../models/todoModel';
+import type { CreateTodoRequest } from '../types/todo';
+import { sendSuccess, sendSuccessPagination, sendError } from '../utils/response';
 
-export const getTodos = async (req: Request, res: Response): Promise<void> => {
-    const userId = res.locals.userId;
-    try {
-        const todos = await TodoModel.getByUserId(userId);
-        res.status(200).json({ success: true, data: todos });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Gagal mengambil data.' });
+// 1. Get All Todos dengan Implementasi Pagination
+export const getAllTodos = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      sendError(res, 'User tidak terautentikasi!', 401);
+      return;
     }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const perPage = parseInt(req.query.perPage as string) || 10;
+    const offset = (page - 1) * perPage;
+
+    const todos = await todoModel.getByUserId(userId, perPage, offset);
+    const total = await todoModel.countByUserId(userId);
+    const totalPages = Math.ceil(total / perPage);
+
+    sendSuccessPagination({
+      res,
+      message: 'Berhasil mengambil data todo.',
+      data: todos,
+      pagination: { page, perPage, total, totalPages }
+    });
+  } catch (error) {
+    sendError(res, 'Gagal mengambil data todo.', 500);
+  }
 };
 
-export const getTodoById = async (req: Request, res: Response): Promise<void> => {
-    const { id } = req.params; 
-    const userId = res.locals.userId;
-    try {
-        const todo = await TodoModel.getById(Number(id), userId);
-        if (!todo) {
-            res.status(404).json({ success: false, message: 'Tugas tidak ditemukan!' });
-            return;
-        }
-        res.status(200).json({ success: true, data: todo });
-    } catch (error: any) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-};
-
+// 2. Create Todo
 export const createTodo = async (req: Request, res: Response): Promise<void> => {
-    const { task } = req.body;
-    const userId = res.locals.userId;
-    try {
-        const newId = await TodoModel.create(userId, task);
-        res.status(201).json({
-            success: true,
-            message: 'Tugas berhasil ditambahkan!',
-            data: { id: newId, task, is_completed: false }
-        });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Gagal menambahkan tugas.' });
+  const payload: CreateTodoRequest = req.body;
+  try {
+    const userID = req.user?.id;
+    if (!userID) {
+      sendError(res, 'User tidak terautentikasi!', 401);
+      return;
     }
-};
 
-export const updateTodo = async (req: Request, res: Response): Promise<void> => {
-    const { id } = req.params;
-    const { task, is_completed } = req.body;
-    const userId = res.locals.userId;
-    try {
-        const affectedRows = await TodoModel.update(Number(id), task, is_completed, userId);
-        if (affectedRows === 0) {
-            res.status(404).json({ success: false, message: 'Tugas tidak ditemukan atau bukan milik Anda.' });
-            return;
-        }
-        res.status(200).json({ success: true, message: 'Tugas berhasil diperbarui!' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Gagal memperbarui tugas.' });
-    }
-};
+    await (todoModel as any).create(payload.task, userID);
 
-export const deleteTodo = async (req: Request, res: Response): Promise<void> => {
-    const { id } = req.params;
-    const userId = res.locals.userId;
-    try {
-        const affectedRows = await TodoModel.delete(Number(id), userId);
-        if (affectedRows === 0) {
-            res.status(404).json({ success: false, message: 'Tugas tidak ditemukan atau bukan milik Anda.' });
-            return;
-        }
-        res.status(200).json({ success: true, message: 'Tugas berhasil dihapus!' });
-    } catch (error) {
-        res.status(500).json({ success: false, message: 'Gagal menghapus tugas.' });
-    }
+    sendSuccess(res, 'Todo berhasil ditambahkan!', undefined, 201);
+  } catch (error) {
+    sendError(res, 'Gagal menambahkan todo.', 500);
+  }
 };

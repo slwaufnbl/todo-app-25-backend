@@ -1,10 +1,8 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { UserModel } from '../models/userModel.js';
-
-
-
+import { UserModel } from '../models/userModel';
+import dotenv from 'dotenv';
 
 export const register = async (req: Request, res: Response): Promise<void> => {
     const { username, email, password } = req.body;
@@ -13,6 +11,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         await UserModel.create(username, email, hashedPassword);
         res.status(201).json({ success: true, message: 'Registrasi berhasil!' });
     } catch (error: any) {
+        console.error(error);
         if (error.code === 'ER_DUP_ENTRY') {
             res.status(409).json({ success: false, message: 'Username atau Email sudah terdaftar!' });
             return;
